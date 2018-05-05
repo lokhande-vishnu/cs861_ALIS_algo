@@ -56,7 +56,7 @@ def perceptron_train(ltrain, w_init, ltrain_pt, eta_):
     print('training', sum(ltrain_pt))
     for t in range(epochs):
         for idx, (x, label) in enumerate(ltrain):
-            if (np.dot(x, w)*label) <= 0:
+            if (np.dot(x, w)*label) < 0:
                 w += 1.0*eta*x*label/ltrain_pt[idx]
                 print('CORRECTION', 1.0*eta*x*label/ltrain_pt[idx])
     return w
