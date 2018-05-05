@@ -77,6 +77,12 @@ def compute_y_pseudo(U, w_pred):
             y_pseudo.append(1)
     return y_pseudo
 
+def compute_y_true(U):
+    y_true = []
+    for i in range(len(U)):
+        y_true.append(U[i][1])
+    return y_true
+
 def psuedo_loss(U, pt, y_pseudo, w_pred):
     t = 0
     for i in range(len(U)):
@@ -196,6 +202,41 @@ def runRS(train, test, n_sample_draws):
 
     return test_errors_rs
 
+def runBestOracle(train, test, n_sample_draws):
+
+    # Best Oracel algorithm
+    S, U = breakData(train)
+
+    print('\n Running  BestOracle algorithm ...')
+    print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
+
+    eta_ = 1e-5
+    pt_init = [(1.0/len(S))]*len(S)
+    w_init = np.zeros(2)
+    w_pred = perceptron_train(S, w_init, pt_init, eta_)
+    print(perceptron_test(S, w_pred))
+
+    test_errors_bo = []
+    for k in range(n_sample_draws):
+        y_true = compute_y_true(U)
+        pt = compute_pt(U, w_pred, y_true)
+
+        print('before', len(U), len(S), len(y_true), len(pt))
+        V, index_V, V_pt =  sample(U, pt)
+        print('w_pred_before', w_pred)
+        w_pred = perceptron_train(V, w_pred, V_pt, eta_)
+        U, S = update_sets(U, S, index_V)
+        print('w_pred_after', w_pred)
+        print('after', len(U), len(S))
+        
+        error_k = perceptron_test(test, w_pred)
+
+        print('BestOracle - iteration: %d, error: %f' % (k, error_k))
+        test_errors_bo.append(error_k)
+
+    return test_errors_bo
+
+
 def main():
     train, test = generateData()
 
@@ -204,21 +245,29 @@ def main():
     
     alis_avg_test_errors = [0]*n_iterations
     rs_avg_test_errors = [0]*n_iterations
+    bo_avg_test_errors = [0]*n_iterations
     for i in range(n_exps):
         print('***************EXPERIMENT %d *********' % i)
         alis_i = runALIS(train, test, n_iterations)
         alis_avg_test_errors = np.add(alis_avg_test_errors, np.divide(alis_i, n_exps))
+        
         rs_i =  runRS(train, test, n_iterations)
         rs_avg_test_errors = np.add(rs_avg_test_errors, np.divide(rs_i, n_exps))
 
+        bo_i = runBestOracle(train, test, n_iterations)
+        bo_avg_test_errors = np.add(bo_avg_test_errors, np.divide(bo_i, n_exps))
+        
+
     print(alis_avg_test_errors)
     print(rs_avg_test_errors)
+    print(bo_avg_test_errors)
     
     alis_ln, = plt.plot(alis_avg_test_errors, label= 'ALIS')
     rs_ln, = plt.plot(rs_avg_test_errors, label= 'RS')
+    bo_ln, = plt.plot(bo_avg_test_errors, label = 'BestOracle')
     plt.ylabel('Average Test Set Error over %d experiments' % (n_exps))
     plt.xlabel('Iteration')
-    plt.legend(handles=[alis_ln, rs_ln])
+    plt.legend(handles=[alis_ln, rs_ln, bo_ln])
     plt.show()
 
 
