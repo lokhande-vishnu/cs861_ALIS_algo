@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-device = torch.device("cuda:2") # if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 print('Using device', device)
 
 trainsize = 50000
@@ -123,7 +123,7 @@ def runALIS(train, test, n_sample_draws):
     #print('\n Running  ALIS algorithm ...')
     #print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
 
-    eta_ = 1e-20 #1e-5 #
+    eta_ = 1e-10  #1e-5 #
     pt_init = [(1.0/len(S))]*len(S)
     w_init = torch.zeros(2).to(device)
     w_pred = perceptron_train(S, w_init, pt_init, eta_)
@@ -162,7 +162,7 @@ def runRS(train, test, n_sample_draws):
     #print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
 
     #eta_ = 0.00000000001
-    eta_ = 1e-10 #1e-5
+    eta_ = 1e-1 #1e-5
     pt_init = [1.0/len(S)]*len(S)
     w_init = torch.zeros(2).to(device)
     w_pred = perceptron_train(S, w_init, pt_init, eta_)
@@ -197,7 +197,7 @@ def main():
     train, test = generateData()
 
     n_exps = 10
-    n_iterations = 20
+    n_iterations = 1000
 
     alis_avg_test_errors = [0]*n_iterations
     rs_avg_test_errors = [0]*n_iterations
