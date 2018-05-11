@@ -5,8 +5,8 @@ import torch
 device = torch.device("cuda:2") # if torch.cuda.is_available() else "cpu")
 print('Using device', device)
 
-trainsize = 5000
-testsize = 10000
+trainsize = 50000
+testsize = 50000
 label_fraction = 0.001
 h_star = torch.tensor([0.5, -0.5]).to(device)
 m = 10 # Number of samples to draw in a given iteration
@@ -54,27 +54,24 @@ def perceptron_train(ltrain, w_init, ltrain_pt, eta_):
     eta = eta_
     epochs = 1
 
-    print('training sum of pt', sum(ltrain_pt))
+    #print('training sum of pt', sum(ltrain_pt))
     for t in range(epochs):
         for i in range(len(ltrain)):
             x = ltrain[i][:2]
             label = ltrain[i][2]
             if (torch.dot(x, w)*label) <= 0:
-                print('w',w)
-                print('x',x)
-                print('l',label)
-                print('e',ltrain_pt[i])
                 w += 1.0*eta*x*label/ltrain_pt[i]
-                print('CORRECTION', 1.0*eta*x*label/ltrain_pt[i])
+                #print('CORRECTION', 1.0*eta*x*label/ltrain_pt[i])
     return w
 
 def perceptron_test(data, w):
     diff = torch.mv(data[:, :2], w) * data[:, 2]
-    error = torch.sum(torch.clamp(diff, max=0.0))
-    print(diff)
-    print(torch.clamp(diff, max=0.0))
-    print(torch.sum(torch.clamp(diff, max=0.0)))
-    return -error
+    error = torch.sum(diff[diff <= 0])
+    error_val = torch.sum(diff <= 0)
+    #print(diff)
+    #print(torch.clamp(diff, max=0.0))
+    #print(torch.sum(torch.clamp(diff, max=0.0)))
+    return -error.item(), error_val.item()
 
 def compute_y_pseudo(U, w_pred):
     y_pseudo = - torch.sign(torch.mv(U[:,:2], w_pred))
@@ -99,8 +96,8 @@ def compute_pt(U, w_pred, y_pseudo):
     l = torch.clamp(1 - y_pseudo *  torch.mv(U[:,:2], w_pred), min = 0)
     pt = torch.div(l, torch.sum(l))
     
-    print('sumn of pt\n', torch.sum(pt))
-    print('\n')
+    #print('sumn of pt\n', torch.sum(pt))
+    #print('\n')
     return pt
 
 def sample(U, pt):
@@ -123,78 +120,84 @@ def runALIS(train, test, n_sample_draws):
     # ALIS algorithm
     S, U = breakData(train)
    
-    print('\n Running  ALIS algorithm ...')
-    print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
+    #print('\n Running  ALIS algorithm ...')
+    #print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
 
-    eta_ = 1e-5
+    eta_ = 1e-20 #1e-5 #
     pt_init = [(1.0/len(S))]*len(S)
     w_init = torch.zeros(2).to(device)
     w_pred = perceptron_train(S, w_init, pt_init, eta_)
-    print('starting test error', perceptron_test(S, w_pred).item())
+    #print('starting test error', perceptron_test(S, w_pred).item())
 
     test_errors_alis = []
     psuedo_loss_alis = []
+    test_errors_val_alis = []
     for k in range(n_sample_draws):
         y_pseudo = compute_y_pseudo(U, w_pred)
         pt = compute_pt(U, w_pred, y_pseudo)
 
-        print('before: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
+        #print('before: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
         V, index_V, V_pt =  sample(U, pt)
-        print('w_pred_before', w_pred)
+        #print('w_pred_before', w_pred)
         w_pred = perceptron_train(V, w_pred, V_pt, eta_)
         #psuedo_loss_alis.append(psuedo_loss(U, pt, y_pseudo, w_pred))
         U, S = update_sets(U, S, index_V)
-        print('w_pred_after', w_pred)
-        print('after: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
+        #print('w_pred_after', w_pred)
+        #print('after: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
         
-        error_k = perceptron_test(test, w_pred).item()
-        print('ALIS - iteration: %d, error: %f' % (k, error_k))
+        error_k, error_val = perceptron_test(test, w_pred)
+        #print('ALIS - iteration: %d, error: %f' % (k, error_k))
         test_errors_alis.append(error_k)
+        test_errors_val_alis.append(error_val)
 
-    return test_errors_alis
+    print(w_pred[0].item(), w_pred[1].item())
+    return test_errors_val_alis
 
 
 def runRS(train, test, n_sample_draws):
     
     # Random Sampling algorithm
     S, U = breakData(train)
-    print('Running  random sampling algorithm ...')
-    print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
+    #print('Running  random sampling algorithm ...')
+    #print('Size of labelled dataset:%d, Size of unlabelled dataset:%d' % (len(S), len(U)))
 
     #eta_ = 0.00000000001
-    eta_ = 1e-1
+    eta_ = 1e-10 #1e-5
     pt_init = [1.0/len(S)]*len(S)
     w_init = torch.zeros(2).to(device)
     w_pred = perceptron_train(S, w_init, pt_init, eta_)
-    print('starting test error', perceptron_test(S, w_pred).item())
+    #print('starting test error', perceptron_test(S, w_pred).item())
 
     test_errors_rs = []
     psuedo_loss_rs = []
+    test_errors_val_rs = []
     for k in range(n_sample_draws):
         y_pseudo = compute_y_pseudo(U, w_pred)
         pt = torch.tensor([1.0/len(U)]*len(U)).to(device)
 
-        print('before: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
+        #print('before: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
         V, index_V, _ =  sample(U, pt)
         V_pt = [1]*len(V)
-        print('w_pred_before', w_pred)
+        #print('w_pred_before', w_pred)
         w_pred = perceptron_train(V, w_pred, V_pt, eta_)
         #psuedo_loss_rs.append(psuedo_loss(U, pt, y_pseudo, w_pred))
         U, S = update_sets(U, S, index_V)
-        print('w_pred_after', w_pred)
-        print('after: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
+        #print('w_pred_after', w_pred)
+        #print('after: lenU:%d, lenS:%d, lenyp:%d, lenpt:%d' % (len(U), len(S), len(y_pseudo), len(pt)))
         
-        error_k = perceptron_test(test, w_pred).item()
-        print('RS -iteration: %d, error: %f' % (k, error_k))
+        error_k, error_val = perceptron_test(test, w_pred)
+        #print('RS -iteration: %d, error: %f' % (k, error_k))
         test_errors_rs.append(error_k)
+        test_errors_val_rs.append(error_val)
 
-    return test_errors_rs
+    print(w_pred[0].item(), w_pred[1].item())
+    return test_errors_val_rs
 
 def main():
     train, test = generateData()
 
     n_exps = 10
-    n_iterations = 450
+    n_iterations = 20
 
     alis_avg_test_errors = [0]*n_iterations
     rs_avg_test_errors = [0]*n_iterations
